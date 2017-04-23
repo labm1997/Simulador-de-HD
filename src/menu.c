@@ -78,7 +78,10 @@ int menu_apagarArquivo(){
 }
 
 int menu_mostrarFAT(){
-	return -1;
+	char leitura[5];
+	disco_mostrarFAT();
+	fgets(leitura, 5, stdin);
+	return 0;
 }
 
 int menu_sair(){

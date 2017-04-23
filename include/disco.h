@@ -40,9 +40,11 @@ typedef struct fatlist_s{
 } fatlist_s;
 
 typedef struct fatent_s{
-	unsigned int used;
-	unsigned int eof;
+	disco_const used;
+	disco_const eof;
 	unsigned int next;
 } fatent_s;
 
+int iniciar_disco();
 void disco_escreverArquivo(FILE *, char *);
+void disco_mostrarFAT();
