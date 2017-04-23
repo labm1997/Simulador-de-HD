@@ -4,10 +4,10 @@ SDIR=src
 CC=gcc
 CFLAGS=-I $(IDIR) -g
 
-_DEPS=disco.h
+_DEPS=disco.h menu.h
 DEPS=$(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJ=my_drive.o
+_OBJ=my_drive.o menu.o disco.o
 OBJ=$(patsubst %,$(ODIR)/%,$(_OBJ))
 
 $(ODIR)/%.o: $(SDIR)/%.c $(DEPS)
