@@ -50,9 +50,9 @@ int menu_escreverArquivo(){
 			arquivo = fopen(nomeArquivo, "r");
 			if(arquivo == NULL) printf("Arquivo inválido\n");
 			else {
-				printf("********* INÍCIO DO ARQUIVO *********\n\n");
+				/*printf("********* INÍCIO DO ARQUIVO *********\n\n");
 				while(!feof(arquivo)) printf("%c%s", fgetc(arquivo), COR_NORMAL);
-				printf("\n\n%s********** FIM DO ARQUIVO **********\n\n", COR_NORMAL);
+				printf("\n\n%s********** FIM DO ARQUIVO **********\n\n", COR_NORMAL);*/
 				while(1){
 					printf("\rÉ este o arquivo que quer inserir? [S/n] ");
 					fgets(leitura, 2, stdin);
@@ -70,7 +70,15 @@ int menu_escreverArquivo(){
 }
 
 int menu_lerArquivo(){
-	return -1;
+	char nomeArquivo[fileNameLength];
+	while(1){
+		printf("Digite o nome do arquivo [* para voltar]: ");
+		if(fgets(nomeArquivo, fileNameLength, stdin) != NULL && *nomeArquivo != '\n'){
+			if(nomeArquivo[0] == '*') return 0;
+			strtok(nomeArquivo, "\n");
+			disco_lerArquivo(nomeArquivo);
+		}
+	}
 }
 
 int menu_apagarArquivo(){
