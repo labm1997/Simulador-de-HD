@@ -2,7 +2,7 @@ IDIR=include
 ODIR=obj
 SDIR=src
 CC=gcc
-CFLAGS=-I $(IDIR) -g
+CFLAGS=-I $(IDIR) -g -std=c99
 
 _DEPS=disco.h menu.h
 DEPS=$(patsubst %,$(IDIR)/%,$(_DEPS))
