@@ -27,11 +27,33 @@ int (*menu_funcoes[5])() = {
 	menu_sair
 };
 
-int main(){
-	if(iniciar_disco() == 0){
+int main(int argc, char **argv){
+	if(iniciar_disco() != SUCESSO){
 		printf("Não há memória para o disco\n");
 		return 0;
 	}
+	int i=0, limit;
+	char fileName[fileNameLength];
+	FILE *arquivo;
+	
+	/* Teste de estresse, carrega o mesmo arquivo muitas vezes */
+	if(argc == 3){
+		sscanf(argv[2], "%u", &limit);
+		strncpy(fileName, argv[1], fileNameLength-1);
+		printf("%s\n", fileName);
+		arquivo = fopen(fileName, "r");
+		if(arquivo != NULL) {
+			menuApagar = 0;
+			for(;i<limit;i++) {
+				disco_escreverArquivo(arquivo, fileName);
+				rewind(arquivo);
+			}
+			fclose(arquivo);			
+		}
+		else printf("Não foi possível realizar o teste, arquivo inválido\n");
+	}
+	else menuApagar = 1;
+	
 	menu_mostrar("Menu Principal", menu_opcoes, menu_funcoes);
 	
 	return 0;

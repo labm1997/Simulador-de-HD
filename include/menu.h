@@ -13,3 +13,6 @@ int menu_apagarArquivo();
 int menu_mostrarFAT();
 int menu_sair();
 
+/* Variável de controle */
+char menuApagar;
+

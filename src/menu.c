@@ -16,7 +16,8 @@ void menu_mostrar(char *titulo, char **opcoes, int (**funcoes)()){
 	int retorno;
 	char leitura[maximoLeitura], erro = 0;
 	while(1){
-		system("clear"); i=0;
+		menuApagar && system("clear"); 
+		i=0;
 		
 		printf("%s\n\n", titulo);
 		while(opcoes[i][0] != '\0') {
@@ -58,6 +59,7 @@ int menu_escreverArquivo(){
 					fgets(leitura, 2, stdin);
 					if(leitura[0] == 's' || leitura[0] == 'S'){
 						disco_escreverArquivo(arquivo, nomeArquivo);
+						fclose(arquivo);
 						break;
 					}
 					else if(leitura[0] == 'n' || leitura[0] == 'N'){

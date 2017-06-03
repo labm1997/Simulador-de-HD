@@ -49,7 +49,21 @@ typedef struct fatent_s{
 	unsigned int next;
 } fatent_s;
 
-int iniciar_disco();
+typedef enum{
+	ERRO_SEMESPACO,
+	ERRO_LOOPINFINITO,
+	SUCESSO,
+	CLUSTER_LIVRE,
+	CLUSTER_OCUPADO,
+	ERRO_SEMMEMORIA
+} discoRet;
+
+typedef struct coordenadas{
+	unsigned int x, z, t;
+} coordenadas;
+
+discoRet iniciar_disco();
 void disco_escreverArquivo(FILE *, char *);
 void disco_lerArquivo(char *);
 void disco_mostrarFAT();
+

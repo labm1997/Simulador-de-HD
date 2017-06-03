@@ -3,11 +3,16 @@
 #include <string.h>
 #include "../include/disco.h"
 
-track_array cylinders[numCylinders];
+/* Alocação do HD */
+track_array *cylinders;
 
 fatlist_s *fatlist = NULL;
 fatent_s **fatent = NULL;
 
+/* Espaço total no disco */
+unsigned int espaco = numCylinders*tracksByCylinder*sectorByTrack;
+
+/* Setores ocupados do disco */
 unsigned int disco_setoresOcupados = 0;
 
 
@@ -17,37 +22,191 @@ unsigned int disco_setoresOcupados = 0;
   z é o disco
   t é o setor na trilha
 */
-unsigned int getIndex(unsigned int x, unsigned int z, unsigned int t){
-	return x*tracksByCylinder*sectorByTrack+z*sectorByTrack+t;
+unsigned int getIndex(coordenadas *c){
+	return c->x*tracksByCylinder*sectorByTrack+c->z*sectorByTrack+c->t;
 }
 
-int iniciar_disco(){
+/*
+  Converte o valor do índice para as coordenadas do disco
+*/
+void getCoord(unsigned int index, coordenadas *c){
+	c->x = (index/sectorByTrack/tracksByCylinder)%numCylinders;
+	c->z = (index/sectorByTrack)%tracksByCylinder;
+	c->t = index%sectorByTrack;
+}
+
+/* 
+  Inicia o disco, aloca memória para os endereços dos setores e preenche o disco com 0 
+*/
+discoRet iniciar_disco(){
 	unsigned int i=0, j[4], limites[4] = {numCylinders, tracksByCylinder, sectorByTrack, blockSize};
 	
 	fatent = (fatent_s **)malloc(sizeof(fatent_s *)*(numCylinders*tracksByCylinder*sectorByTrack));
-	if(fatent == NULL) return 0;
+	if(fatent == NULL) return ERRO_SEMMEMORIA;
 	
 	for(i=0;i<numCylinders*tracksByCylinder*sectorByTrack;i++) {
 		fatent[i] = (fatent_s *)malloc(sizeof(fatent_s));
 		fatent[i]->used = LIVRE;
 		fatent[i]->eof = LIVRE;
 		fatent[i]->next = LIVRE;
-		if(fatent[i] == NULL) return 0;
+		if(fatent[i] == NULL) return ERRO_SEMMEMORIA;
 	}
 	
-	/* Preenchemos o disco de 0 */
-	for(j[0]=0;j[0]<numCylinders;j[0]++)
-		for(j[1]=0;j[1]<tracksByCylinder;j[1]++)
-			for(j[2]=0;j[2]<sectorByTrack;j[2]++)
-				for(j[3]=0;j[3]<blockSize;j[3]++)
-					cylinders[j[0]].track[j[1]].sector[j[2]].bytes_s[j[3]] = (char)0;
+	/* Criamos o disco por alocação dinâmica */
+	cylinders = (track_array *)calloc(numCylinders, sizeof(track_array));
 	
-	
-	return 1;
+	if(cylinders == NULL) return ERRO_SEMMEMORIA;
+		
+	return SUCESSO;
 }
 
+/*
+  Verifica se o cluster passado está livre
+*/
+discoRet clusterLivre(coordenadas *c){
+	unsigned int contador = 0;
+	coordenadas C = {.x = c->x, .z = c->z, .t = c->t};
+	while(fatent[getIndex(&C)]->used == LIVRE){
+		if(C.t >= sectorByTrack) return CLUSTER_OCUPADO;
+		C.t++;
+		contador++;
+		if(contador == clusterSize) return CLUSTER_LIVRE;
+	}
+	return  CLUSTER_OCUPADO;
+}
+
+/*
+  Encontra o primeiro cluster disponível segundo o percorrimento da especificação
+  recebe a posição (x,z,t) e retorna na própria variável os valores para o cluster achado
+*/
+
+discoRet encontraCluster(coordenadas *c){
+	unsigned int T[2] = {c->z, c->t}, X[3] = {c->x, c->z, c->t};
+	
+	/* Verifica se há setores */
+	if(disco_setoresOcupados >= espaco) return ERRO_SEMESPACO;
+	
+	while(1){
+			
+		if(clusterLivre(c) == CLUSTER_LIVRE){
+			return SUCESSO;
+		}
+		else {
+			/* Pulamos trilha */
+			c->z++;
+			
+			/* Overflow de z */
+			if(c->z >= tracksByCylinder){
+				c->z = 0; /* Voltamos ao disco no topo */
+				c->t += clusterSize; /* Movemos um cluster */
+				/* Overflow de t */
+				if(c->t >= sectorByTrack) c->t = 0;
+			}
+		
+			/* Uma volta foi dada no cilíndro, vamos ao próximo */
+			if(T[0] == c->z && T[1] == c->t) {
+				c->x++;
+				c->t = 0;
+				c->z = 0;
+				T[0] = T[1] = 0;
+			}
+			
+			/* Chega-se ao fim dos cilíndros, voltamos ao primeiro */
+			if(c->x >= numCylinders) {
+				c->x = 0;
+				c->t = 0;
+				c->z = 0;
+			}
+			
+		}	
+	}
+	return SUCESSO;
+}
+
+/* 
+  Grava dados no cluster, precisa do tamanho do arquivo para alterá-lo
+  retorna o setor inicial do cluster gravado
+*/
+
+unsigned int gravarCluster(FILE *arquivo, coordenadas *c, int *arquivoTamanho, unsigned int *primeiro, unsigned int *anterior){
+	unsigned int j = 0, setor, i = getIndex(c);
+	/* Grava-se setor a setor */
+	for(;j<clusterSize;j++){		
+		/* Calculamos o setor a partir de sua coordenada */
+		setor = (i+j);
+		
+		/* Gravamos na memória primária o setor em questão */
+		fread(cylinders[c->x].track[c->z].sector[(c->t+j)].bytes_s, (*arquivoTamanho/blockSize)?blockSize:(*arquivoTamanho%blockSize+1), 1, arquivo);
+		
+		/* Reduzimos o arquivoTamanho para o novo tamanho que resta a ser inserido */
+		*arquivoTamanho-=(*arquivoTamanho/blockSize)?blockSize:(*arquivoTamanho%blockSize+1);
+	
+		/* Atualiamos os endereços*/
+		fatent[setor]->used = OCUPADO;
+		fatent[setor]->next = NULO;
+		fatent[setor]->eof = NULO;
+	
+		/* Variável de controle de espaço */
+		disco_setoresOcupados++;
+		
+		/* 
+		  Caso seja o primeiro setor, salvamos o valor do setor inicial,
+		  será usado na construção da tabela FAT.
+		*/
+	
+		if(*primeiro == -1) *primeiro = setor;
+		else fatent[*anterior]->next = setor;
+	
+		/* Trata-se do setor anterior, será usado na criação do EOF */
+		*anterior = setor;
+	}
+	return i-clusterSize+1;
+}
+
+/*
+  Calcula o tempo de seek + transferência da gravação e movimentação da cabeça e leitura
+*/
+double calculaTempo(unsigned int cluster, unsigned int *posCabecaLeitura){
+	double tempo = 0;
+	
+	/* Contamos o tempo */
+	/* Seek */
+	if(cluster/(sectorByTrack*tracksByCylinder) != *posCabecaLeitura/(sectorByTrack*tracksByCylinder)){
+		tempo += seekTime; /* Somamos o tempo médio de seek */
+	}
+	
+	/* Atualizamos a posição da cabeça de leitura e escrita */
+	*posCabecaLeitura = cluster;
+	
+	/* Latência */
+	tempo += delayTime; /* Somamos o tempo médio de latência */
+	
+	/* Tempo de transferência */
+	tempo += clusterSize*(double)transferTime/(sectorByTrack);
+	return tempo;
+}
+
+/*
+  Mede o quanto realmente um cluster foi ocupado
+*/
+unsigned int calculaTamanhoSetor(coordenadas *c){
+	int j=blockSize-1, tamanho=blockSize;
+	
+	/* Byte a byte, começando do último */
+	for(;j>=0;j--){
+		if(cylinders[c->x].track[c->z].sector[c->t].bytes_s[j] == 0) tamanho--;
+		else return tamanho;
+	}
+	
+	return 0;
+}
+
+/*
+  Função que escreve arquivo no disco
+*/
+
 void disco_escreverArquivo(FILE *arquivo, char *nome){
-	unsigned int clustersNecessarios, i, j, contaSetores = 0, posCabecaLeitura = 0, setor;
+	unsigned int clustersNecessarios, i, j, contaSetores = 0, posCabecaLeitura = 0, setor, inicioSetor = 0, cluster;
 	int primeiro = -1, anterior, arquivoTamanho;
 	fatlist_s *novo, *tmp;
 	
@@ -58,11 +217,8 @@ void disco_escreverArquivo(FILE *arquivo, char *nome){
 	  Variáveis de coordenada do setor
 	  x, cilíndro; z, disco e t setor na trilha
 	*/
-	unsigned int x = 0, z = 0, t = 0;
-	
-	/* Espaço total no disco */
-	unsigned int espaco = numCylinders*tracksByCylinder*sectorByTrack;
-	
+	coordenadas c = {.x = 0, .z = 0, .t = 0};
+		
 	/* Verificamos se o nome já não existe na FAT */
 	/*tmp = fatlist;
 	if(tmp != NULL){
@@ -84,6 +240,7 @@ void disco_escreverArquivo(FILE *arquivo, char *nome){
 	/* Calculamos quantos clusters serão necessários para armazenar este arquivo */
 	clustersNecessarios = arquivoTamanho/(blockSize*clusterSize);
 	if(arquivoTamanho%(blockSize*clusterSize)) clustersNecessarios++;
+	printf("Serão usados %d clusters\n", clustersNecessarios);
 	
 	/* A partir do número de clusters, vemos se o arquivo cabe no disco */	
 	if(disco_setoresOcupados+clustersNecessarios*clusterSize>espaco) {
@@ -94,121 +251,65 @@ void disco_escreverArquivo(FILE *arquivo, char *nome){
 	/* Voltamos o arquivo a posição original para ser lido */
 	rewind(arquivo);
 	
-	/* Percorremos o disco */
-	printf("Gravando:\nTRILHA\tDISCO\tSETOR\n");
-	while(arquivoTamanho > 0){
-		i = getIndex(x,z,t);
-		printf("%u\n", i);
-		/* 
-		  Caso o setor esteja livre, somamos ao contador de setores sequenciais,
-		  serve para encontrar setores consecutivos e formar um cluster
-		*/
+	/* Percorremos para achar o primeiro cluster */
+	while(primeiro == -1){
+		i = getIndex(&c);
+		/* Setor livre */
 		if(fatent[i]->used == LIVRE) {
 			/* Verificamos se o novo setor está na mesma trilha do setor anterior */
-			if(contaSetores && t+1 >= sectorByTrack) contaSetores = 0;
-			else contaSetores++;
-		}
-		else contaSetores = 0;
-		
-		/*
-		  Completamos um cluster, logo inserimos os dados nesse cluster
-		*/
-		if(contaSetores == clusterSize){
-			
-			/* Inserimos no cluster, setor a setor */
-			for(j=0;j<clusterSize;j++){
-				printf("%u\t%u\t%u\n", x, z, (t-(clusterSize-1-j)));
-				/* Calculamos o setor a partir de sua coordenada */
-				setor = (i-(clusterSize-1-j));
-				
-				if(arquivoTamanho > 0) {
-					/* Gravamos na memória primária o setor em questão */
-					fread(cylinders[x].track[z].sector[(t-(clusterSize-1-j))].bytes_s, (arquivoTamanho/blockSize)?blockSize:(arquivoTamanho%blockSize+1), 1, arquivo);
-					//printf("GRAVADO NO SETOR %u:\n********\n%s\n********\n", setor, cylinders[x].track[z].sector[t].bytes_s);
-				}
-				
-				/* Reduzimos o arquivoTamanho para o novo tamanho que resta a ser inserido */
-				arquivoTamanho-=(arquivoTamanho/blockSize)?blockSize:(arquivoTamanho%blockSize+1);
-				
-				/* Atualiamos os endereços*/
-				fatent[setor]->used = OCUPADO;
-				fatent[setor]->next = NULO;
-				fatent[setor]->eof = NULO;
-				
-				/* Variável de controle de espaço */
-				disco_setoresOcupados++;
-				
-				/* 
-				  Caso seja o primeiro setor, salvamos o valor do setor inicial,
-				  será usado na construção da tabela FAT.
-				*/
-				
-				if(primeiro == -1) primeiro = setor;
-				else fatent[anterior]->next = setor;
-				
-				/* Trata-se do setor anterior, será usado na criação do EOF */
-				anterior = setor;
-				
-				/* Contamos o tempo */
-				/* Seek */
-				if(setor/(sectorByTrack*tracksByCylinder) != posCabecaLeitura/(sectorByTrack*tracksByCylinder))	{
-					tempo += seekTime; /* Somamos o tempo médio de seek */
-				}
-				/* Atualizamos a posição da cabeça de leitura e escrita */
-				posCabecaLeitura = setor;
-				
+			if(contaSetores && c.t >= sectorByTrack) {
+				contaSetores = 0;
 			}
+			else contaSetores++;
+		
+		}
+		
+		/* Se contamos o número certo de setores para um cluster, inserimos nele */
+		if(contaSetores == clusterSize){
+			c.t -= clusterSize-1;
 			
-			/* Latência */
-			tempo += delayTime; /* Somamos o tempo médio de latência */
-			/* Tempo de transferência */
-			tempo += clusterSize*(double)transferTime/(sectorByTrack);
+			/* Gravamos no cluster */
+			setor = gravarCluster(arquivo, &c, &arquivoTamanho, &primeiro, &anterior);
 			
+			/* Contamos o tempo */
+			tempo += calculaTempo(cluster, &posCabecaLeitura);
+		
 			/* Zeramos a contagem dos setores */
 			contaSetores = 0;
-			
-			/* Não mudamos de cilíndro, apenas de trilha */
-			z++;
-			t++;
-			
-			/* Verificações das coordenadas */
 		
-			/* Se chegamos ao último disco, então voltamos ao primeiro e vamos ao próximo cilíndro */
-			if(z >= tracksByCylinder) {
-				z = 0;
-				x++;
-			}
-		}
-		
-		/* Trilha cheia, ir para o próximo cilíndro */
-		else if(primeiro == -1 && t+1 >= sectorByTrack){
-			
-			printf("%u %u %u\n", x, z, t);
-			int tmp_pos = i+1-sectorByTrack*(tracksByCylinder*(numCylinders-1)+1);
-			
-			/* Verificamos pelo final de um disco, (fim de trilha e último cilíndro) */
-			if(x == numCylinders-1 && t+1 >= sectorByTrack) {
-				/* Pulamos um disco */
-				z++;
-				/* Zeramos o resto */
-				x = 0; t = 0;
-				//printf("Retirando de i: %u\n", sectorByTrack*(tracksByCylinder)*(numCylinders-1)-1);
-			}
-			else {
-				/* Rebobinamos a posição na trilha */
-				t = 0;
-				/* Pulamos um cilíndro */
-				x++;
-			}
+			/* Não mudamos de cilíndro, apenas de trilha, possivelmente problemático */
+			c.z++;
+			c.t+=clusterSize-1;
+			inicioSetor = c.t;
 		}
 		
 		/* Andamos um setor */
-		else t++;
-		
-		/* Rebobinamos t e vamos para o próximo cilíndro */
-		if(t >= sectorByTrack){
-			t = 0;
-			x++;
+		c.t++;
+	
+		/* Fim da trilha, vamos ao próximo cilíndro */
+		if(c.t >= sectorByTrack){
+			c.x++; c.t=0;
+		}
+	
+		/* Fim cilíndros, vamos para o próximo disco (próxima trilha) */
+		if(c.x >= numCylinders){
+			c.x=0; c.z++; c.t=0;
+		}
+	}
+	
+	/* Percorremos o resto do disco e inserimos conforme regra de percorrimento */
+	while(arquivoTamanho > 0){
+		i = getIndex(&c);
+			
+		if(encontraCluster(&c) == SUCESSO){
+			/* Gravamos no cluster */
+			cluster = gravarCluster(arquivo, &c, &arquivoTamanho, &primeiro, &anterior);
+			/* Contamos o tempo */
+			tempo += calculaTempo(cluster, &posCabecaLeitura);
+		}
+		else {
+			printf("ERRO TERRÍVEL\n");
+			exit(1);
 		}
 		
 	
@@ -241,7 +342,6 @@ void disco_escreverArquivo(FILE *arquivo, char *nome){
 	
 	printf("%u/%u do disco ocupado\n", disco_setoresOcupados, espaco);
 	printf("Arquivo salvo em %.2lf ms\n", tempo);
-	fclose(arquivo);
 	return;
 }
 
@@ -249,16 +349,28 @@ void disco_lerArquivo(char *nomeArquivo){
 	fatlist_s *tmp = fatlist;
 	fatent_s *tmp_file;
 	FILE *saida;
+	coordenadas c;
 	if(tmp != NULL){
+		/* Buscamos por arquivos na tabela FAT */
 		do {
+			/* Encontramos o nome do arquivo na tabela FAT */
 			if(strcmp(nomeArquivo, tmp->file_name) == 0) {
+				/* Arquivo de saída */
 				saida = fopen("SAIDA.TXT", "w");
 				
+				/* Pegamos o primeiro setor do arquivo */
 				tmp_file = fatent[tmp->first_sector];
-				fwrite(cylinders[(tmp->first_sector/sectorByTrack/tracksByCylinder)%numCylinders].track[(tmp->first_sector/sectorByTrack)%tracksByCylinder].sector[tmp->first_sector%sectorByTrack].bytes_s, blockSize, 1, saida);
+				
+				/* Obtemos as coordenadas do setor */
+				getCoord(tmp->first_sector, &c);
+				
+				/* Gravamos o primeiro setor de acordo com o seu tamanho real */
+				fwrite(cylinders[c.x].track[c.z].sector[c.t].bytes_s, calculaTamanhoSetor(&c), 1, saida);
 			
+				/* Análogo para os outros setores */
 				while(tmp_file->eof != ULTIMOSETOR) {
-					fwrite(cylinders[(tmp_file->next/sectorByTrack/tracksByCylinder)%numCylinders].track[(tmp_file->next/sectorByTrack)%tracksByCylinder].sector[tmp_file->next%sectorByTrack].bytes_s, blockSize, 1, saida);
+					getCoord(tmp_file->next, &c);
+					fwrite(cylinders[c.x].track[c.z].sector[c.t].bytes_s, calculaTamanhoSetor(&c), 1, saida);
 					tmp_file = fatent[tmp_file->next];
 				}
 				fclose(saida);
@@ -287,7 +399,7 @@ void disco_mostrarFAT(){
 		} while(tmp != NULL);
 		
 		printf("NOME:");
-		for(int i=0;i<maiorNome-5;i++) printf(" ");
+		for(int i=0;i<maiorNome-4;i++) printf(" ");
 		printf("\tTAMANHO EM DISCO\tLOCALIZAÇÃO\n");
 		
 		tmp = fatlist;
@@ -311,7 +423,7 @@ void disco_mostrarFAT(){
 				tmp_file = fatent[tmp_file->next];
 			}
 			
-			printf("%s\t%10u bytes\t", tmp->file_name, blockSize*(j+1));
+			printf("%-10s\t%10u bytes\t", tmp->file_name, blockSize*(j+1));
 			int k=0;
 			while(k<=j) {
 			if(warning++>1000000) exit(0);
