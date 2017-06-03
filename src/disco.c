@@ -57,7 +57,7 @@ discoRet iniciar_disco(){
 	}
 	
 	/* Criamos o disco por alocação dinâmica */
-	cylinders = (track_array *)calloc(numCylinders, sizeof(track_array));
+	cylinders = (track_array *)malloc(numCylinders*sizeof(track_array));
 	
 	if(cylinders == NULL) return ERRO_SEMMEMORIA;
 		
@@ -133,17 +133,19 @@ discoRet encontraCluster(coordenadas *c){
 */
 
 unsigned int gravarCluster(FILE *arquivo, coordenadas *c, int *arquivoTamanho, unsigned int *primeiro, unsigned int *anterior){
-	unsigned int j = 0, setor, i = getIndex(c);
+	unsigned int j = 0, setor, i = getIndex(c), k, blocodegravacao;
 	/* Grava-se setor a setor */
 	for(;j<clusterSize;j++){		
 		/* Calculamos o setor a partir de sua coordenada */
 		setor = (i+j);
 		
 		/* Gravamos na memória primária o setor em questão */
-		fread(cylinders[c->x].track[c->z].sector[(c->t+j)].bytes_s, (*arquivoTamanho/blockSize)?blockSize:(*arquivoTamanho%blockSize+1), 1, arquivo);
+		blocodegravacao = (*arquivoTamanho/blockSize)?blockSize:(*arquivoTamanho%blockSize+1);
+		for(k=0;k<blockSize;k++) cylinders[c->x].track[c->z].sector[(c->t+j)].bytes_s[k] = (char)0; /* O setor deve ser vazio inicialmente */
+		fread(cylinders[c->x].track[c->z].sector[(c->t+j)].bytes_s, blocodegravacao, 1, arquivo);
 		
 		/* Reduzimos o arquivoTamanho para o novo tamanho que resta a ser inserido */
-		*arquivoTamanho-=(*arquivoTamanho/blockSize)?blockSize:(*arquivoTamanho%blockSize+1);
+		*arquivoTamanho-=blocodegravacao;
 	
 		/* Atualiamos os endereços*/
 		fatent[setor]->used = OCUPADO;
@@ -238,6 +240,7 @@ void disco_escreverArquivo(FILE *arquivo, char *nome){
 	if(tmp != NULL && !modoTeste){
 		do {
 			if(strcmp(nome, tmp->file_name) == 0) {
+				print_leftVerbose("FALHA", COR_VERMELHO);
 				printf("Já há um arquivo com este nome\n");
 				return;
 			}
@@ -384,19 +387,23 @@ void disco_lerArquivo(char *nomeArquivo){
 				tmp_file = fatent[tmp->first_sector];
 				
 				/* Obtemos as coordenadas do setor */
-				getCoord(tmp->first_sector, &c);
-				
-				/* Gravamos o primeiro setor de acordo com o seu tamanho real */
-				fwrite(cylinders[c.x].track[c.z].sector[c.t].bytes_s, calculaTamanhoSetor(&c), 1, saida);
-				tempo += calculaTempo(getIndex(&c));	
+				getCoord(tmp->first_sector, &c);	
 			
-				/* Análogo para os outros setores */
-				while(tmp_file->eof != ULTIMOSETOR) {
-					getCoord(tmp_file->next, &c);
+				/* Percorremos os setores */
+				while(1) {
+				
+					/* Gravamos o primeiro setor de acordo com o seu tamanho real */
 					fwrite(cylinders[c.x].track[c.z].sector[c.t].bytes_s, calculaTamanhoSetor(&c), 1, saida);
+					
 					tempo += calculaTempo(getIndex(&c));	
+					getCoord(tmp_file->next, &c);
+					
+					/* Paramos */
+					if(tmp_file->eof == ULTIMOSETOR) break;
+					
 					tmp_file = fatent[tmp_file->next];
 				}
+				
 				print_leftVerbose("INFOR", COR_VERDE);
 				printf("Arquivo lido em %.2lf ms\n", tempo);
 				fclose(saida);
@@ -422,25 +429,18 @@ void disco_removerArquivo(char *nomeArquivo){
 			if(strcmp(nomeArquivo, tmp->file_name) == 0) {
 				/* Pegamos o primeiro setor do arquivo */
 				tmp_file = fatent[tmp->first_sector];
-				
-				/* Obtemos as coordenadas do setor */
-				getCoord(tmp->first_sector, &c);
-				
-				/* Apagamos tudo do setor */
-				for(i=0;i<blockSize;i++)
-					cylinders[c.x].track[c.z].sector[c.t].bytes_s[i] = (char)0;
-				tmp_file->used = LIVRE;
-				disco_setoresOcupados--;
-			
-				/* Análogo para os outros setores */
-				while(tmp_file->eof != ULTIMOSETOR) {
-					getCoord(tmp_file->next, &c);
-					for(i=0;i<blockSize;i++)
-						cylinders[c.x].track[c.z].sector[c.t].bytes_s[i] = (char)0;
+							
+				/* Liberamos os setores */
+				while(1) {
 					tmp_file->used = LIVRE;
 					disco_setoresOcupados--;
+					
+					/* Paramos */
+					if(tmp_file->eof == ULTIMOSETOR) break;
+					
 					tmp_file = fatent[tmp_file->next];
 				}
+				
 				
 				/* Removemos da tabela FAT */
 				if(tmp_anterior != NULL) tmp_anterior->next = tmp->next;

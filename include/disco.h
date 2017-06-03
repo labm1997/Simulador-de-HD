@@ -68,3 +68,10 @@ void disco_lerArquivo(char *);
 void disco_removerArquivo(char *);
 void disco_mostrarFAT();
 
+unsigned int getIndex(coordenadas *);
+void getCoord(unsigned int, coordenadas *);
+discoRet clusterLivre(coordenadas *);
+discoRet encontraCluster(coordenadas *);
+unsigned int gravarCluster(FILE *, coordenadas *, int *, unsigned int *, unsigned int *);
+double calculaTempo(unsigned int);
+unsigned int calculaTamanhoSetor(coordenadas *);
