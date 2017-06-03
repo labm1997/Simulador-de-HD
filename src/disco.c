@@ -490,7 +490,8 @@ void disco_mostrarFAT(){
 			while(tmp_file->eof != ULTIMOSETOR) {
 				new = (unsigned int *)realloc(tmp_file_setores, (++j+1)*sizeof(unsigned int));
 				if(new == NULL){
-					printf("Problema ao realocar");
+					print_leftVerbose("FALHA", COR_VERMELHO);
+					printf("Problema ao realocar\n");
 					exit(1);
 				}
 				else tmp_file_setores = new;
