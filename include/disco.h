@@ -5,8 +5,8 @@
 #define blockSize 512 /* em bytes */
 #define clusterSize 4 /* Em setores */
 #define sectorByTrack 60
-#define tracksByCylinder 5 
-#define numCylinders 10 
+#define tracksByCylinder 5
+#define numCylinders 10
 
 #define seekTime 4 /* Em ms */
 #define delayTime 6 /* Em ms */
@@ -65,5 +65,6 @@ typedef struct coordenadas{
 discoRet iniciar_disco();
 void disco_escreverArquivo(FILE *, char *);
 void disco_lerArquivo(char *);
+void disco_removerArquivo(char *);
 void disco_mostrarFAT();
 

@@ -43,7 +43,7 @@ int main(int argc, char **argv){
 		printf("%s\n", fileName);
 		arquivo = fopen(fileName, "r");
 		if(arquivo != NULL) {
-			menuApagar = 0;
+			modoTeste = 1;
 			for(;i<limit;i++) {
 				disco_escreverArquivo(arquivo, fileName);
 				rewind(arquivo);
@@ -52,7 +52,7 @@ int main(int argc, char **argv){
 		}
 		else printf("Não foi possível realizar o teste, arquivo inválido\n");
 	}
-	else menuApagar = 1;
+	else modoTeste = 0;
 	
 	menu_mostrar("Menu Principal", menu_opcoes, menu_funcoes);
 	

@@ -16,7 +16,7 @@ void menu_mostrar(char *titulo, char **opcoes, int (**funcoes)()){
 	int retorno;
 	char leitura[maximoLeitura], erro = 0;
 	while(1){
-		menuApagar && system("clear"); 
+		!modoTeste && system("clear"); 
 		i=0;
 		
 		printf("%s\n\n", titulo);
@@ -25,9 +25,10 @@ void menu_mostrar(char *titulo, char **opcoes, int (**funcoes)()){
 			i++;
 		}
 		
-		if(erro == 1) printf("%sOpção inválida%s\n", COR_VERMELHO, COR_NORMAL);
+		if(erro == 1) printf("%sOpção inválida%s", COR_VERMELHO, COR_NORMAL);
 		else if(erro == 2) printf("%sA função não faz nada%s\n", COR_VERMELHO, COR_NORMAL);
 		
+		printf("\n>> ");
 		fgets(leitura, maximoLeitura, stdin);
 		if(sscanf(leitura, "%u", &opcao) && opcao > 0 && opcao <= i){
 			erro=0;
@@ -84,7 +85,15 @@ int menu_lerArquivo(){
 }
 
 int menu_apagarArquivo(){
-	return -1;
+	char nomeArquivo[fileNameLength];
+	while(1){
+		printf("Digite o nome do arquivo a ser removido [* para voltar]: ");
+		if(fgets(nomeArquivo, fileNameLength, stdin) != NULL && *nomeArquivo != '\n'){
+			if(nomeArquivo[0] == '*') return 0;
+			strtok(nomeArquivo, "\n");
+			disco_removerArquivo(nomeArquivo);
+		}
+	}
 }
 
 int menu_mostrarFAT(){
@@ -95,6 +104,18 @@ int menu_mostrarFAT(){
 }
 
 int menu_sair(){
+	printf("Tchau!\n");
 	return 1;
 }
 
+/* Mostra o texto a esquerda da verbose */
+int print_leftVerbose(const char *text, const char *cor){
+	int size = strlen(text), padding = (leftVerboseSize-size)/2, rest = (leftVerboseSize-size)%2, i;
+	if(size > leftVerboseSize) return 0;
+	printf("[%s", cor);
+	for(i=0;i<padding;i++) printf(" ");
+	printf("%s", text);
+	for(i=0;i<padding+rest;i++) printf(" ");
+	printf("%s]  ", COR_NORMAL);
+	return 1;
+}
