@@ -259,7 +259,7 @@ void disco_escreverArquivo(FILE *arquivo, char *nome){
 	clustersNecessarios = arquivoTamanho/(blockSize*clusterSize);
 	if(arquivoTamanho%(blockSize*clusterSize)) clustersNecessarios++;
 	print_leftVerbose("OK!", COR_VERDE);
-	printf("Serão usados %d clusters\n", clustersNecessarios);
+	printf("Serão usados %u clusters\n", clustersNecessarios);
 	
 	/* A partir do número de clusters, vemos se o arquivo cabe no disco */	
 	if(disco_setoresOcupados+clustersNecessarios*clusterSize>espaco) {
@@ -499,7 +499,7 @@ void disco_mostrarFAT(){
 				tmp_file = fatent[tmp_file->next];
 			}
 			
-			printf("%-10s\t%10u bytes\t", tmp->file_name, blockSize*(j+1));
+			printf("%-10s\t%10d bytes\t", tmp->file_name, blockSize*(j+1));
 			int k=0;
 			while(k<=j) {
 				printf("%u", tmp_file_setores[k]);

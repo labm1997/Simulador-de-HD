@@ -38,7 +38,7 @@ int main(int argc, char **argv){
 	
 	/* Teste de estresse, carrega o mesmo arquivo muitas vezes */
 	if(argc == 3){
-		sscanf(argv[2], "%u", &limit);
+		sscanf(argv[2], "%d", &limit);
 		strncpy(fileName, argv[1], fileNameLength-1);
 		printf("%s\n", fileName);
 		arquivo = fopen(fileName, "r");
